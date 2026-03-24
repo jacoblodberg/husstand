@@ -445,9 +445,20 @@ async function save(d) {
   }
 }
 
+function normalizeData(val) {
+  if (!val) return null;
+  // Firebase stores arrays as objects with numeric keys — convert back
+  const toArr = v => v ? (Array.isArray(v) ? v : Object.values(v)) : [];
+  return {
+    ...val,
+    inventory: toArr(val.inventory),
+    manualShopping: toArr(val.manualShopping),
+  };
+}
+
 onValue(ref(db, DB_PATH), snap => {
   if (ignoreNext) { ignoreNext = false; return; }
-  const val = snap.val();
+  const val = normalizeData(snap.val());
   if (val) {
     appData = val;
     document.getElementById("loading").style.display = "none";
@@ -486,7 +497,9 @@ document.getElementById("setup-name").addEventListener("keydown", e => {
 // ── Render ────────────────────────────────────────────────────────────────────
 function render() {
   if (!appData) return;
-  const { householdName, inventory, manualShopping } = appData;
+  const inventory = Array.isArray(appData.inventory) ? appData.inventory : Object.values(appData.inventory || {});
+  const manualShopping = Array.isArray(appData.manualShopping) ? appData.manualShopping : Object.values(appData.manualShopping || {});
+  const householdName = appData.householdName;
   const shopList = mergeShop(inventory, manualShopping);
 
   document.getElementById("hdr-date").textContent =
