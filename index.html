@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Husstand">
+<title>Min husholdning</title>
+<style>
+:root {
+  --bg:      #F5F0E8;
+  --surface: #EDE8DE;
+  --card:    #E8E2D6;
+  --border:  #D4CCC0;
+  --text:    #3D3530;
+  --muted:   #8C8278;
+  --faint:   #A09690;
+  --accent:  #7A8C6E;
+  --warm:    #B5724A;
+  --alert:   #C4855A;
+  --low:     #C4855A;
+  --empty:   #B85040;
+  --high:    #5C7A50;
+  --white:   #FAF7F2;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Georgia', serif;
+  min-height: 100vh;
+  max-width: 500px;
+  margin: 0 auto;
+}
+input, select, button, textarea { font-family: -apple-system, 'Segoe UI', sans-serif; }
+input::placeholder { color: var(--faint); }
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+@keyframes fadein  { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+@keyframes glow    { 0%,100%{opacity:1} 50%{opacity:.5} }
+@keyframes spin    { to { transform: rotate(360deg); } }
+
+/* ── Loading ── */
+#loading {
+  position: fixed; inset: 0; background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 16px; z-index: 999;
+}
+.spinner {
+  width: 32px; height: 32px; border: 2px solid var(--border);
+  border-top-color: var(--warm); border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+
+/* ── Setup ── */
+#setup {
+  display: none; min-height: 100vh;
+  align-items: center; justify-content: center; padding: 24px;
+  flex-direction: column; text-align: center; gap: 0;
+}
+#setup .icon { font-size: 48px; margin-bottom: 20px; }
+#setup h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 8px; }
+#setup p  { font-size: 14px; color: var(--muted); line-height: 1.6; margin-bottom: 32px; }
+#setup input {
+  width: 100%; padding: 13px; text-align: center; font-size: 16px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text); margin-bottom: 12px; outline: none;
+}
+#setup button {
+  width: 100%; padding: 14px; border-radius: 8px; border: none;
+  background: var(--warm); color: var(--white); font-size: 14px;
+  font-weight: 700; cursor: pointer; letter-spacing: .2px;
+}
+
+/* ── App ── */
+#app { display: none; }
+
+/* ── Header ── */
+header {
+  background: var(--bg); position: sticky; top: 0; z-index: 10;
+  padding: 20px 20px 0;
+}
+.hdr-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 16px; }
+.hdr-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 3px; }
+.hdr-name  { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+.sync-dot  { display: flex; align-items: center; gap: 5px; margin-top: 3px; }
+.sync-dot span { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); display: inline-block; }
+.sync-dot p    { font-size: 10px; color: var(--muted); letter-spacing: .3px; }
+.add-btn {
+  width: 40px; height: 40px; border-radius: 20px; border: none;
+  background: var(--warm); color: var(--white); font-size: 24px;
+  font-weight: 300; cursor: pointer; display: flex;
+  align-items: center; justify-content: center; flex-shrink: 0;
+}
+
+/* ── Tabs ── */
+.tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--border); }
+.tab-btn {
+  background: none; border: none; padding: 0 0 12px;
+  font-size: 14px; font-weight: 600; cursor: pointer;
+  color: var(--faint); border-bottom: 2px solid transparent;
+  display: flex; align-items: center; gap: 7px; transition: all .2s;
+}
+.tab-btn.active { color: var(--text); border-bottom-color: var(--warm); }
+.badge {
+  background: var(--warm); color: var(--white);
+  border-radius: 10px; padding: 1px 7px;
+  font-size: 10px; font-weight: 700;
+}
+
+/* ── Content ── */
+.content { padding: 20px 20px 120px; }
+
+/* ── Empty state ── */
+.empty { text-align: center; padding-top: 80px; animation: fadein .4s; }
+.empty .check { font-size: 52px; margin-bottom: 16px; }
+.empty h2 { font-size: 17px; font-weight: 600; margin-bottom: 6px; }
+.empty p  { font-size: 13px; color: var(--muted); }
+
+/* ── Group header ── */
+.group-head {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  background: none; border: none; padding: 14px 0 8px;
+  cursor: pointer; border-bottom: 1px solid var(--border); margin-bottom: 2px;
+}
+.group-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.group-label { flex: 1; text-align: left; font-size: 12px; font-weight: 600; letter-spacing: .4px; text-transform: uppercase; color: var(--muted); }
+.group-count { font-size: 11px; color: var(--faint); }
+.group-arrow { font-size: 10px; color: var(--faint); margin-left: 8px; }
+
+/* ── Shop row ── */
+.shop-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 0; border-bottom: 1px solid var(--border); gap: 12px;
+  font-family: -apple-system, sans-serif;
+}
+.shop-row .auto-tag { font-size: 9px; font-weight: 700; color: var(--muted); letter-spacing: .8px; text-transform: uppercase; display: block; margin-bottom: 2px; }
+.shop-row .name { font-size: 15px; font-weight: 500; }
+.shop-btns { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+.done-btn {
+  background: var(--accent); border: none; border-radius: 6px;
+  color: var(--white); padding: 8px 16px; cursor: pointer;
+  font-size: 13px; font-weight: 600; letter-spacing: .2px;
+}
+.remove-btn {
+  background: none; border: 1px solid var(--border); border-radius: 6px;
+  color: var(--muted); padding: 7px 10px; cursor: pointer; font-size: 13px;
+}
+
+/* ── Inv row ── */
+.inv-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 10px; border-radius: 6px; margin-bottom: 2px;
+  cursor: pointer; transition: background .15s;
+  font-family: -apple-system, sans-serif;
+}
+.inv-row.low { border-left: 2px solid var(--low); background: var(--surface); }
+.inv-row .iname { font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 4px; }
+.tag { font-size: 10px; font-weight: 600; border-radius: 4px; padding: 1px 6px; letter-spacing: .3px; }
+
+/* ── Level bar ── */
+.level-wrap { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.level-bar-outer { width: 52px; }
+.level-bar-track { height: 3px; background: var(--border); border-radius: 2px; margin-bottom: 3px; overflow: hidden; }
+.level-bar-fill  { height: 100%; border-radius: 2px; transition: width .3s; }
+.level-bar-label { font-size: 10px; font-weight: 600; text-align: center; letter-spacing: .3px; }
+.qty-label { font-size: 13px; font-weight: 600; min-width: 58px; text-align: center; }
+
+/* ── Qty buttons ── */
+.q-btn {
+  width: 30px; height: 30px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--white);
+  color: var(--text); font-size: 18px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 500; flex-shrink: 0;
+}
+.plus-inv {
+  background: none; border: 1px solid var(--border); border-radius: 6px;
+  color: var(--muted); padding: 7px 10px; cursor: pointer; font-size: 13px;
+}
+
+/* ── Search / group toggle ── */
+.search-row { display: flex; gap: 8px; margin-bottom: 16px; }
+.search-wrap { flex: 1; position: relative; }
+.search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--faint); font-size: 14px; }
+.search-inp {
+  width: 100%; padding: 11px 13px 11px 32px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text); font-size: 14px; outline: none;
+  font-family: -apple-system, sans-serif;
+}
+.grp-toggle {
+  flex-shrink: 0; padding: 0 14px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 7px; color: var(--muted); font-size: 12px;
+  font-weight: 600; cursor: pointer; white-space: nowrap;
+  font-family: -apple-system, sans-serif;
+}
+.grp-toggle.on { background: var(--card); color: var(--text); border-color: rgba(61,53,48,.18); }
+
+.seed-btn {
+  width: 100%; margin-bottom: 14px; padding: 11px; border-radius: 8px;
+  border: 1px dashed var(--border); background: transparent;
+  color: var(--muted); font-size: 12px; font-weight: 500; cursor: pointer; letter-spacing: .3px;
+}
+
+/* ── Overlay / Modal ── */
+.overlay {
+  position: fixed; inset: 0; background: rgba(61,53,48,.5);
+  display: flex; align-items: flex-end; justify-content: center;
+  z-index: 100; backdrop-filter: blur(4px);
+}
+.modal {
+  background: var(--white); border-radius: 16px 16px 0 0;
+  padding: 28px 22px 48px; width: 100%; max-width: 500px;
+  max-height: 92vh; overflow-y: auto;
+  font-family: -apple-system, sans-serif;
+}
+.modal-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; }
+.modal-title { font-size: 18px; font-weight: 700; letter-spacing: -.2px; }
+.modal-close { background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; padding: 0 4px; }
+.lbl { display: block; font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 5px; margin-top: 16px; text-transform: uppercase; letter-spacing: .8px; }
+.inp {
+  width: 100%; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text); padding: 11px 13px; font-size: 14px; outline: none;
+  font-family: -apple-system, sans-serif;
+}
+.inp-row { display: flex; gap: 8px; margin-bottom: 6px; }
+.seg-btns { display: flex; gap: 5px; }
+.seg-btn {
+  flex: 1; padding: 9px 8px; border-radius: 7px;
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer;
+  white-space: nowrap; transition: all .15s;
+}
+.seg-btn.on { background: var(--card); color: var(--text); border-color: rgba(61,53,48,.18); }
+.gen-btns { display: flex; gap: 5px; }
+.gen-btn {
+  flex: 1; padding: 12px 4px; border-radius: 8px; border: 1.5px solid var(--border);
+  background: var(--white); color: var(--muted); font-size: 11px; font-weight: 700;
+  cursor: pointer; transition: all .15s; text-align: center;
+}
+.gen-bar { height: 2px; background: var(--border); border-radius: 1px; margin: 0 auto 6px; min-width: 4px; }
+.num-row { display: flex; gap: 10px; }
+.num-col { flex: 1; }
+.std-row { display: flex; align-items: center; justify-content: space-between; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border); gap: 12px; }
+.std-info h4 { font-size: 13px; font-weight: 600; }
+.std-info p  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.toggle {
+  width: 42px; height: 24px; border-radius: 12px; border: none;
+  padding: 3px; background: var(--border); cursor: pointer;
+  display: flex; align-items: center; transition: background .2s; flex-shrink: 0;
+}
+.toggle.on { background: var(--accent); }
+.toggle-knob {
+  width: 18px; height: 18px; border-radius: 50%; background: var(--white);
+  box-shadow: 0 1px 3px rgba(0,0,0,.12); transition: transform .2s;
+}
+.toggle.on .toggle-knob { transform: translateX(18px); }
+.modal-btns { display: flex; gap: 8px; margin-top: 24px; }
+.outline-btn {
+  flex: 1; padding: 12px; border-radius: 8px; border: 1px solid var(--border);
+  background: transparent; color: var(--text); font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.delete-btn { color: var(--alert) !important; border-color: rgba(196,133,90,.4) !important; }
+.primary-btn {
+  flex: 2; padding: 12px; border-radius: 8px; border: none;
+  background: var(--warm); color: var(--white); font-size: 14px;
+  font-weight: 700; cursor: pointer; letter-spacing: .2px;
+}
+.voice-btn {
+  width: 42px; height: 42px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--muted); font-size: 16px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.voice-btn.listening { background: var(--accent); color: var(--white); }
+.voice-hint { font-size: 11px; color: var(--accent); margin: 0 0 8px; }
+.voice-err  { font-size: 11px; color: var(--alert);  margin: 0 0 8px; }
+
+/* ── Toast ── */
+.toast {
+  position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+  background: var(--text); color: var(--white); border-radius: 8px;
+  padding: 11px 22px; font-weight: 600; font-size: 13px;
+  box-shadow: 0 6px 24px rgba(61,53,48,.25); z-index: 200;
+  white-space: nowrap; font-family: -apple-system, sans-serif;
+  letter-spacing: .2px; animation: fadein .2s;
+}
+.toast.warn { background: var(--alert); }
+</style>
+</head>
+<body>
+
+<!-- Loading -->
+<div id="loading">
+  <div class="spinner"></div>
+  <p style="color:var(--muted);font-size:13px;font-family:-apple-system,sans-serif">Henter data…</p>
+</div>
+
+<!-- Setup -->
+<div id="setup">
+  <div class="icon">🏠</div>
+  <h1>Husstand</h1>
+  <p>Giv jeres husstand et navn<br>for at komme i gang</p>
+  <input id="setup-name" type="text" placeholder="fx Min husholdning" />
+  <button id="setup-btn">Kom i gang</button>
+</div>
+
+<!-- App -->
+<div id="app">
+  <header>
+    <div class="hdr-top">
+      <div>
+        <div class="hdr-title" id="hdr-date"></div>
+        <div class="hdr-name" id="hdr-name"></div>
+        <div class="sync-dot">
+          <span id="sync-dot-circle"></span>
+          <p id="sync-label">Synkroniseret</p>
+        </div>
+      </div>
+      <button class="add-btn" id="add-btn">+</button>
+    </div>
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="shopping">
+        Indkøb <span class="badge" id="shop-badge" style="display:none"></span>
+      </button>
+      <button class="tab-btn" data-tab="inventory">Beholdning</button>
+    </div>
+  </header>
+  <div class="content" id="content"></div>
+</div>
+
+<!-- Modal -->
+<div class="overlay" id="modal-overlay" style="display:none">
+  <div class="modal" id="modal-body"></div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast" style="display:none"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-database.js";
+
+// ── Firebase config ───────────────────────────────────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyA3UyPJ_vUu8XRON1N4x_L5678e9QVKfY4",
+  authDomain: "min-husholdning.firebaseapp.com",
+  databaseURL: "https://min-husholdning-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "min-husholdning",
+  storageBucket: "min-husholdning.firebasestorage.app",
+  messagingSenderId: "724147955278",
+  appId: "1:724147955278:web:891dfac24ead09861c851f"
+};
+
+const fbApp = initializeApp(firebaseConfig);
+const db = getDatabase(fbApp);
+const DB_PATH = "husstand/data";
+
+// ── Data helpers ──────────────────────────────────────────────────────────────
+const SHOP_CATS = [
+  { id:"groent",    label:"Grønt",               color:"#7A8C6E" },
+  { id:"koed",      label:"Kød",                 color:"#A0614A" },
+  { id:"mejeri",    label:"Mejeri & Æg",         color:"#B8975A" },
+  { id:"konserves", label:"Konserves",            color:"#8C7A5E" },
+  { id:"toervarer", label:"Tørvarer & Kolonial",  color:"#6E7A8C" },
+  { id:"alkohol",   label:"Alkohol",              color:"#8C6E7A" },
+  { id:"snacks",    label:"Snacks",               color:"#7A6E8C" },
+  { id:"andet",     label:"Andet",                color:"#8C8278" },
+];
+const LOCATIONS = [
+  { id:"koeleskabt",  label:"Køleskab" },
+  { id:"fryser",      label:"Fryser" },
+  { id:"spisekammer", label:"Spisekammer" },
+  { id:"koekken",     label:"Køkken" },
+  { id:"kaelder",     label:"Kælder" },
+  { id:"badevaer",    label:"Badeværelse" },
+  { id:"andet_lok",   label:"Andet sted" },
+];
+const GEN_LEVELS = [
+  { val:0, label:"Tom",    color:"#B85040", bar:0    },
+  { val:1, label:"Lav",    color:"#C4855A", bar:0.33 },
+  { val:2, label:"Middel", color:"#7A8C6E", bar:0.66 },
+  { val:3, label:"Høj",    color:"#5C7A50", bar:1    },
+];
+
+function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function makeItem(name, location, shopCat) {
+  return { id:genId(), name, location, shopCat, qtyMode:"general", qty:2, unit:"", minQty:null, isStandard:false };
+}
+const SEED = [
+  makeItem("Ærter","fryser","groent"), makeItem("Persille","fryser","groent"),
+  makeItem("Basilikum","fryser","groent"), makeItem("Avokado","fryser","groent"),
+  makeItem("Fiskefilet","fryser","koed"), makeItem("Kylling","fryser","koed"),
+  makeItem("Kidney bønner","spisekammer","konserves"), makeItem("Sorte bønner","spisekammer","konserves"),
+  makeItem("Hakkede tomater","spisekammer","konserves"), makeItem("Gochujang","spisekammer","konserves"),
+  makeItem("Tipo 00 mel","spisekammer","toervarer"), makeItem("Rugmel","spisekammer","toervarer"),
+  makeItem("Couscous","spisekammer","toervarer"), makeItem("Peanuts","spisekammer","snacks"),
+  makeItem("Knækbrød","spisekammer","snacks"), makeItem("Tamarindpaste","koeleskabt","toervarer"),
+  makeItem("Fiskesauce","koeleskabt","toervarer"), makeItem("Sriracha","koeleskabt","toervarer"),
+  makeItem("Tahini","koeleskabt","toervarer"),
+];
+
+function isLow(item) {
+  if (item.qtyMode==="general") return item.qty <= 1;
+  if (item.minQty !== null && item.minQty !== undefined) return item.qty <= item.minQty;
+  return item.qty <= 0;
+}
+function needsAuto(item) { return item.isStandard && isLow(item); }
+function mergeShop(inv, man) {
+  const autoIds = new Set();
+  const auto = inv.filter(needsAuto).map(i => { autoIds.add(i.id); return {...i, auto:true}; });
+  return [...auto, ...man.filter(i => !autoIds.has(i.id))];
+}
+function qtyDisp(item) {
+  if (item.qtyMode==="general") {
+    const lv = GEN_LEVELS.find(l => l.val===item.qty) || GEN_LEVELS[0];
+    return { label:lv.label, color:lv.color, bar:lv.bar };
+  }
+  return { label:`${item.qty} ${item.unit}`, color: isLow(item) ? "#C4855A" : "#8C8278", bar:null };
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let appData = null;
+let tab = "shopping";
+let groupBy = "shopCat";
+let search = "";
+let collapsed = {};
+let ignoreNext = false; // prevent re-render loop on own writes
+
+// ── Firebase ──────────────────────────────────────────────────────────────────
+async function save(d) {
+  setSyncStatus("syncing");
+  ignoreNext = true;
+  try {
+    await set(ref(db, DB_PATH), d);
+    setSyncStatus("ok");
+  } catch(e) {
+    setSyncStatus("error");
+    ignoreNext = false;
+  }
+}
+
+onValue(ref(db, DB_PATH), snap => {
+  if (ignoreNext) { ignoreNext = false; return; }
+  const val = snap.val();
+  if (val) {
+    appData = val;
+    document.getElementById("loading").style.display = "none";
+    document.getElementById("setup").style.display = "none";
+    document.getElementById("app").style.display = "block";
+    render();
+  } else {
+    document.getElementById("loading").style.display = "none";
+    document.getElementById("setup").style.display = "flex";
+  }
+});
+
+function setSyncStatus(s) {
+  const dot = document.getElementById("sync-dot-circle");
+  const lbl = document.getElementById("sync-label");
+  if (!dot) return;
+  dot.style.background = s==="ok" ? "#7A8C6E" : s==="syncing" ? "#B5724A" : "#B85040";
+  dot.style.animation = s==="syncing" ? "glow 1s infinite" : "none";
+  lbl.textContent = s==="ok" ? "Delt · synkroniseret" : s==="syncing" ? "Gemmer…" : "Fejl – prøv igen";
+}
+
+// ── Setup ─────────────────────────────────────────────────────────────────────
+document.getElementById("setup-btn").onclick = async () => {
+  const name = document.getElementById("setup-name").value.trim();
+  if (!name) return;
+  appData = { householdName: name, inventory: SEED, manualShopping: [] };
+  document.getElementById("setup").style.display = "none";
+  document.getElementById("app").style.display = "block";
+  await save(appData);
+  render();
+};
+document.getElementById("setup-name").addEventListener("keydown", e => {
+  if (e.key === "Enter") document.getElementById("setup-btn").click();
+});
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function render() {
+  if (!appData) return;
+  const { householdName, inventory, manualShopping } = appData;
+  const shopList = mergeShop(inventory, manualShopping);
+
+  document.getElementById("hdr-date").textContent =
+    new Date().toLocaleDateString("da-DK", {weekday:"long", day:"numeric", month:"long"});
+  document.getElementById("hdr-name").textContent = householdName;
+
+  // badge
+  const badge = document.getElementById("shop-badge");
+  if (shopList.length > 0) { badge.style.display="inline"; badge.textContent = shopList.length; }
+  else badge.style.display = "none";
+
+  const content = document.getElementById("content");
+  if (tab === "shopping") renderShopping(content, shopList);
+  else renderInventory(content, inventory, shopList);
+}
+
+function renderShopping(el, shopList) {
+  const cats = SHOP_CATS
+    .map(c => ({...c, items: shopList.filter(i => i.shopCat === c.id)}))
+    .filter(c => c.items.length > 0);
+
+  if (!cats.length) {
+    el.innerHTML = `<div class="empty"><div class="check">✓</div><h2>Indkøbslisten er tom</h2><p>Standardvarer tilføjes automatisk ved lav beholdning</p></div>`;
+    return;
+  }
+
+  el.innerHTML = "";
+  cats.forEach(cat => {
+    const key = "s_"+cat.id;
+    const open = !collapsed[key];
+    const wrap = document.createElement("div");
+    wrap.style.marginBottom = "4px";
+
+    const hdr = document.createElement("button");
+    hdr.className = "group-head";
+    hdr.innerHTML = `<span class="group-dot" style="background:${cat.color}"></span>
+      <span class="group-label">${cat.label}</span>
+      <span class="group-count">${cat.items.length}</span>
+      <span class="group-arrow">${open?"▼":"▶"}</span>`;
+    hdr.onclick = () => { collapsed[key] = !collapsed[key]; render(); };
+    wrap.appendChild(hdr);
+
+    if (open) {
+      cat.items.forEach(item => {
+        const row = document.createElement("div");
+        row.className = "shop-row";
+        row.innerHTML = `
+          <div style="flex:1;min-width:0">
+            ${item.auto ? `<span class="auto-tag">automatisk</span>` : ""}
+            <span class="name">${item.name}</span>
+          </div>
+          <div class="shop-btns">
+            ${!item.auto ? `<button class="remove-btn" data-id="${item.id}">✕</button>` : ""}
+            <button class="done-btn" data-id="${item.id}">Købt</button>
+          </div>`;
+        wrap.appendChild(row);
+      });
+    }
+    el.appendChild(wrap);
+  });
+
+  // events
+  el.querySelectorAll(".done-btn").forEach(btn => btn.onclick = () => markBought(btn.dataset.id));
+  el.querySelectorAll(".remove-btn").forEach(btn => btn.onclick = () => removeFromShop(btn.dataset.id));
+}
+
+function renderInventory(el, inventory, shopList) {
+  el.innerHTML = "";
+
+  // search + toggle
+  const sr = document.createElement("div");
+  sr.className = "search-row";
+  sr.innerHTML = `
+    <div class="search-wrap">
+      <span class="search-icon">⌕</span>
+      <input class="search-inp" placeholder="Søg varer…" value="${search}" id="search-inp" />
+    </div>
+    <button class="grp-toggle ${groupBy==="location"?"on":""}" id="grp-toggle">
+      ${groupBy==="shopCat"?"Placering":"Type"}
+    </button>`;
+  el.appendChild(sr);
+
+  document.getElementById("search-inp").oninput = e => { search = e.target.value; render(); };
+  document.getElementById("grp-toggle").onclick = () => { groupBy = groupBy==="shopCat"?"location":"shopCat"; render(); };
+
+  // seed btn
+  if (!inventory.some(i => i.name === "Tahini")) {
+    const sb = document.createElement("button");
+    sb.className = "seed-btn";
+    sb.textContent = "Tilføj råvareliste (19 varer)";
+    sb.onclick = importSeed;
+    el.appendChild(sb);
+  }
+
+  if (!inventory.length) {
+    const emp = document.createElement("div");
+    emp.className = "empty";
+    emp.innerHTML = `<h2>Ingen varer endnu</h2><p>Tryk + for at tilføje din første vare</p>`;
+    el.appendChild(emp);
+    return;
+  }
+
+  const filtered = inventory.filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
+  const groups = (groupBy==="shopCat" ? SHOP_CATS : LOCATIONS)
+    .map(g => ({...g, items: filtered.filter(i => (groupBy==="shopCat" ? i.shopCat : i.location) === g.id)}))
+    .filter(g => g.items.length > 0);
+
+  groups.forEach(group => {
+    const key = "i_"+group.id;
+    const open = !collapsed[key];
+    const wrap = document.createElement("div");
+    wrap.style.marginBottom = "4px";
+
+    const hdr = document.createElement("button");
+    hdr.className = "group-head";
+    hdr.innerHTML = `<span class="group-dot" style="background:${group.color||"#8C8278"}"></span>
+      <span class="group-label">${group.label}</span>
+      <span class="group-count">${group.items.length}</span>
+      <span class="group-arrow">${open?"▼":"▶"}</span>`;
+    hdr.onclick = () => { collapsed[key] = !collapsed[key]; render(); };
+    wrap.appendChild(hdr);
+
+    if (open) {
+      group.items.forEach(item => {
+        const low = isLow(item);
+        const onList = mergeShop(inventory, appData.manualShopping).some(s => s.id === item.id);
+        const qd = qtyDisp(item);
+
+        const row = document.createElement("div");
+        row.className = "inv-row" + (low ? " low" : "");
+
+        let levelHtml = "";
+        if (item.qtyMode === "general") {
+          levelHtml = `<div class="level-wrap">
+            <button class="q-btn" data-id="${item.id}" data-d="-1">−</button>
+            <div class="level-bar-outer">
+              <div class="level-bar-track"><div class="level-bar-fill" style="width:${qd.bar*100}%;background:${qd.color}"></div></div>
+              <div class="level-bar-label" style="color:${qd.color}">${qd.label}</div>
+            </div>
+            <button class="q-btn" data-id="${item.id}" data-d="1">+</button>
+          </div>`;
+        } else {
+          levelHtml = `<div class="level-wrap">
+            <button class="q-btn" data-id="${item.id}" data-d="-1">−</button>
+            <span class="qty-label" style="color:${qd.color}">${qd.label}</span>
+            <button class="q-btn" data-id="${item.id}" data-d="1">+</button>
+          </div>`;
+        }
+
+        const tagsHtml = (item.isStandard||low||onList) ? `<div class="tags">
+          ${item.isStandard ? `<span class="tag" style="color:#7A8C6E;background:#7A8C6E18">standard</span>` : ""}
+          ${low ? `<span class="tag" style="color:#C4855A;background:#C4855A18;animation:glow 2s infinite">${item.qtyMode==="general"&&item.qty===0?"tom":"lav"}</span>` : ""}
+          ${onList ? `<span class="tag" style="color:#B5724A;background:#B5724A18">på liste</span>` : ""}
+        </div>` : "";
+
+        row.innerHTML = `
+          <div style="flex:1;min-width:0">
+            <div class="iname">${item.name}</div>
+            ${tagsHtml}
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+            ${levelHtml}
+            ${!onList ? `<button class="plus-inv" data-id="${item.id}">+</button>` : ""}
+          </div>`;
+
+        row.querySelector(".iname").parentElement.onclick = (e) => {
+          if (e.target.closest("button")) return;
+          openEditModal(item);
+        };
+
+        wrap.appendChild(row);
+      });
+    }
+    el.appendChild(wrap);
+  });
+
+  // events
+  el.querySelectorAll(".q-btn").forEach(btn => btn.onclick = e => {
+    e.stopPropagation();
+    adjustQty(btn.dataset.id, parseInt(btn.dataset.d));
+  });
+  el.querySelectorAll(".plus-inv").forEach(btn => btn.onclick = e => {
+    e.stopPropagation();
+    addToShop(btn.dataset.id);
+  });
+}
+
+// ── Actions ───────────────────────────────────────────────────────────────────
+function markBought(id) {
+  const inv = appData.inventory.map(i => {
+    if (i.id !== id) return i;
+    if (i.qtyMode==="general") return {...i, qty: Math.min(3, i.qty+1)};
+    return {...i, qty: +(i.qty+1).toFixed(2)};
+  });
+  const item = appData.inventory.find(i=>i.id===id) || appData.manualShopping.find(i=>i.id===id);
+  appData = {...appData, inventory: inv, manualShopping: appData.manualShopping.filter(i=>i.id!==id)};
+  save(appData); render();
+  showToast(item ? `${item.name} lagt i beholdning` : "Lagt i beholdning");
+}
+
+function removeFromShop(id) {
+  appData = {...appData, manualShopping: appData.manualShopping.filter(i=>i.id!==id)};
+  save(appData); render();
+}
+
+function addToShop(id) {
+  const shopList = mergeShop(appData.inventory, appData.manualShopping);
+  if (shopList.some(s=>s.id===id)) { showToast("Allerede på listen", true); return; }
+  const item = appData.inventory.find(i=>i.id===id);
+  appData = {...appData, manualShopping: [...appData.manualShopping, {...item, auto:false}]};
+  save(appData); render();
+  showToast(`${item.name} tilføjet`);
+}
+
+function adjustQty(id, delta) {
+  appData = {...appData, inventory: appData.inventory.map(i => {
+    if (i.id !== id) return i;
+    if (i.qtyMode==="general") return {...i, qty: Math.max(0, Math.min(3, i.qty+delta))};
+    return {...i, qty: Math.max(0, +(i.qty+delta).toFixed(2))};
+  })};
+  save(appData); render();
+}
+
+function importSeed() {
+  const ex = new Set(appData.inventory.map(i=>i.name.toLowerCase()));
+  const toAdd = SEED.filter(i=>!ex.has(i.name.toLowerCase())).map(i=>({...i, id:genId()}));
+  if (!toAdd.length) { showToast("Alle varer findes allerede", true); return; }
+  appData = {...appData, inventory: [...appData.inventory, ...toAdd]};
+  save(appData); render();
+  showToast(`${toAdd.length} varer tilføjet`);
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.onclick = () => {
+    tab = btn.dataset.tab;
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab===tab));
+    render();
+  };
+});
+
+// ── Add button ────────────────────────────────────────────────────────────────
+document.getElementById("add-btn").onclick = () => {
+  if (tab === "shopping") openAddShopModal();
+  else openAddItemModal();
+};
+
+// ── Modals ────────────────────────────────────────────────────────────────────
+function openModal(html, onMount) {
+  const body = document.getElementById("modal-body");
+  body.innerHTML = html;
+  document.getElementById("modal-overlay").style.display = "flex";
+  document.getElementById("modal-overlay").onclick = e => { if (e.target.id==="modal-overlay") closeModal(); };
+  body.querySelector(".modal-close")?.addEventListener("click", closeModal);
+  if (onMount) onMount(body);
+}
+function closeModal() {
+  document.getElementById("modal-overlay").style.display = "none";
+}
+
+function openAddShopModal() {
+  openModal(`
+    <div class="modal-hdr">
+      <span class="modal-title">Tilføj til indkøbsliste</span>
+      <button class="modal-close">✕</button>
+    </div>
+    <label class="lbl">Varenavn</label>
+    <div class="inp-row">
+      <input class="inp" id="m-name" placeholder="fx Havregryn" style="flex:1" />
+      <button class="voice-btn" id="m-voice">🎤</button>
+    </div>
+    <label class="lbl">Kategori</label>
+    <select class="inp" id="m-cat">
+      ${SHOP_CATS.map(c=>`<option value="${c.id}">${c.label}</option>`).join("")}
+    </select>
+    <div class="modal-btns">
+      <button class="outline-btn" id="m-cancel">Annuller</button>
+      <button class="primary-btn" id="m-save">Tilføj til liste</button>
+    </div>
+  `, body => {
+    body.querySelector("#m-cancel").onclick = closeModal;
+    body.querySelector("#m-name").addEventListener("keydown", e => { if(e.key==="Enter") body.querySelector("#m-save").click(); });
+    setupVoice(body.querySelector("#m-voice"), body.querySelector("#m-name"));
+    body.querySelector("#m-save").onclick = () => {
+      const name = body.querySelector("#m-name").value.trim();
+      const shopCat = body.querySelector("#m-cat").value;
+      if (!name) return;
+      const item = { id:genId(), name, shopCat, location:"andet_lok", qtyMode:"general", qty:0, unit:"", minQty:null, isStandard:false, auto:false };
+      appData = {...appData, manualShopping: [...appData.manualShopping, item]};
+      save(appData); render(); closeModal();
+      showToast(`${name} tilføjet til indkøbsliste`);
+    };
+    setTimeout(() => body.querySelector("#m-name").focus(), 100);
+  });
+}
+
+function openAddItemModal() { openItemModal(null); }
+function openEditModal(item) { openItemModal(item); }
+
+function openItemModal(item) {
+  const isEdit = !!item;
+  const f = item ? {...item} : { name:"", shopCat:"groent", location:"koeleskabt", qtyMode:"stk", qty:1, unit:"stk", minQty:null, isStandard:false };
+
+  function buildHtml(f) {
+    const genBtns = GEN_LEVELS.map(lv => `
+      <button class="gen-btn ${f.qty===lv.val&&f.qtyMode==="general"?"active-gen":""}" data-val="${lv.val}"
+        style="${f.qty===lv.val&&f.qtyMode==="general"?`border-color:${lv.color};background:${lv.color}18;color:${lv.color}`:""}">
+        <div class="gen-bar" style="width:${lv.bar*100}%;background:${f.qty===lv.val&&f.qtyMode==="general"?lv.color:"var(--border)"}"></div>
+        ${lv.label}
+      </button>`).join("");
+
+    return `
+      <div class="modal-hdr">
+        <span class="modal-title">${isEdit ? item.name : "Ny vare"}</span>
+        <button class="modal-close">✕</button>
+      </div>
+      <label class="lbl">Varenavn</label>
+      <div class="inp-row">
+        <input class="inp" id="m-name" placeholder="fx Havregryn" value="${f.name}" style="flex:1" />
+        <button class="voice-btn" id="m-voice">🎤</button>
+      </div>
+      <label class="lbl">Kategori (indkøb)</label>
+      <select class="inp" id="m-cat">${SHOP_CATS.map(c=>`<option value="${c.id}" ${f.shopCat===c.id?"selected":""}>${c.label}</option>`).join("")}</select>
+      <label class="lbl">Placering</label>
+      <select class="inp" id="m-loc">${LOCATIONS.map(l=>`<option value="${l.id}" ${f.location===l.id?"selected":""}>${l.label}</option>`).join("")}</select>
+      <label class="lbl">Mængdetype</label>
+      <div class="seg-btns">
+        ${[["general","Generel"],["stk","Styktal"],["metric","Mål/Vægt"]].map(([id,lbl])=>`<button class="seg-btn ${f.qtyMode===id?"on":""}" data-mode="${id}">${lbl}</button>`).join("")}
+      </div>
+      ${f.qtyMode==="general" ? `<label class="lbl">Beholdning</label><div class="gen-btns">${genBtns}</div>` : ""}
+      ${f.qtyMode!=="general" ? `<div class="num-row">
+        <div class="num-col"><label class="lbl">Antal</label><input class="inp" id="m-qty" type="number" min="0" step="${f.qtyMode==="metric"?0.1:1}" value="${f.qty}"/></div>
+        <div class="num-col"><label class="lbl">Enhed</label><input class="inp" id="m-unit" placeholder="${f.qtyMode==="metric"?"liter / kg":"stk / pakke"}" value="${f.unit}"/></div>
+      </div>` : ""}
+      <div class="std-row">
+        <div class="std-info"><h4>Standardvare</h4><p>Genbestilles automatisk ved lav / tom beholdning</p></div>
+        <button class="toggle ${f.isStandard?"on":""}" id="m-std"><div class="toggle-knob"></div></button>
+      </div>
+      ${f.isStandard && f.qtyMode!=="general" ? `<label class="lbl">Min. beholdning</label><input class="inp" id="m-min" type="number" min="0" step="${f.qtyMode==="metric"?0.1:1}" placeholder="0 = kun ved tom" value="${f.minQty??""}" />` : ""}
+      <div class="modal-btns">
+        ${isEdit ? `<button class="outline-btn delete-btn" id="m-del">Slet</button>` : ""}
+        <button class="outline-btn" id="m-cancel">Annuller</button>
+        <button class="primary-btn" id="m-save">${isEdit?"Gem ændringer":"Tilføj vare"}</button>
+      </div>`;
+  }
+
+  openModal(buildHtml(f), body => {
+    function rebind() {
+      body.querySelector(".modal-close").onclick = closeModal;
+      body.querySelector("#m-cancel").onclick = closeModal;
+      setupVoice(body.querySelector("#m-voice"), body.querySelector("#m-name"));
+
+      body.querySelectorAll(".seg-btn").forEach(btn => btn.onclick = () => {
+        f.qtyMode = btn.dataset.mode;
+        f.qty = f.qtyMode==="general" ? 2 : 1;
+        f.unit = f.qtyMode==="metric" ? "liter" : "stk";
+        body.innerHTML = buildHtml(f);
+        rebind();
+      });
+
+      body.querySelectorAll(".gen-btn").forEach(btn => btn.onclick = () => {
+        f.qty = parseInt(btn.dataset.val);
+        body.innerHTML = buildHtml(f);
+        rebind();
+      });
+
+      body.querySelector("#m-std")?.addEventListener("click", () => {
+        f.isStandard = !f.isStandard;
+        if (body.querySelector("#m-name")) f.name = body.querySelector("#m-name").value;
+        if (body.querySelector("#m-cat"))  f.shopCat = body.querySelector("#m-cat").value;
+        if (body.querySelector("#m-loc"))  f.location = body.querySelector("#m-loc").value;
+        body.innerHTML = buildHtml(f);
+        rebind();
+      });
+
+      body.querySelector("#m-del")?.addEventListener("click", () => {
+        appData = {
+          ...appData,
+          inventory: appData.inventory.filter(i=>i.id!==item.id),
+          manualShopping: appData.manualShopping.filter(i=>i.id!==item.id)
+        };
+        save(appData); render(); closeModal();
+        showToast("Vare fjernet");
+      });
+
+      body.querySelector("#m-save").onclick = () => {
+        const name = body.querySelector("#m-name").value.trim();
+        if (!name) return;
+        const saved = {
+          ...f,
+          id: isEdit ? item.id : genId(),
+          name,
+          shopCat: body.querySelector("#m-cat").value,
+          location: body.querySelector("#m-loc").value,
+          qty: f.qtyMode==="general" ? f.qty : parseFloat(body.querySelector("#m-qty")?.value||f.qty),
+          unit: body.querySelector("#m-unit")?.value || f.unit,
+          minQty: body.querySelector("#m-min")?.value !== "" && body.querySelector("#m-min")?.value != null
+            ? parseFloat(body.querySelector("#m-min").value) : null,
+        };
+        if (isEdit) {
+          appData = {...appData, inventory: appData.inventory.map(i=>i.id===saved.id?saved:i)};
+          showToast(`${saved.name} opdateret`);
+        } else {
+          appData = {...appData, inventory: [...appData.inventory, saved]};
+          showToast(needsAuto(saved) ? `${saved.name} tilføjet til indkøbsliste` : `${saved.name} tilføjet`);
+        }
+        save(appData); render(); closeModal();
+      };
+
+      setTimeout(() => body.querySelector("#m-name")?.focus(), 100);
+    }
+    rebind();
+  });
+}
+
+// ── Voice input ───────────────────────────────────────────────────────────────
+function setupVoice(btn, inp) {
+  if (!btn || !inp) return;
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { btn.style.display="none"; return; }
+  let rec = null;
+  btn.onclick = () => {
+    if (rec) { rec.stop(); rec=null; btn.classList.remove("listening"); btn.textContent="🎤"; return; }
+    rec = new SR();
+    rec.lang="da-DK"; rec.interimResults=false; rec.maxAlternatives=1;
+    rec.onresult = e => { const t=e.results[0]?.[0]?.transcript||""; if(t) inp.value=t; };
+    rec.onend = () => { rec=null; btn.classList.remove("listening"); btn.textContent="🎤"; };
+    rec.onerror = () => { rec=null; btn.classList.remove("listening"); btn.textContent="🎤"; };
+    rec.start(); btn.classList.add("listening"); btn.textContent="⏹";
+  };
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg, warn=false) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.className = "toast" + (warn?" warn":"");
+  el.style.display = "block";
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.style.display="none", 2400);
+}
+
+</script>
+</body>
+</html>
